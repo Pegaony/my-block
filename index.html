@@ -11,6 +11,9 @@
 <div id="app">
   <canvas id="game"></canvas>
 
+  <!-- Tinte azul cuando la cabeza está bajo el agua -->
+  <div id="water-overlay"></div>
+
   <!-- Mira -->
   <div id="crosshair">+</div>
 
@@ -22,6 +25,8 @@
 
   <!-- Botones superiores derechos -->
   <div id="hud-buttons">
+    <button id="btn-inventory" title="Mochila: inventario y crafteo (B)">🎒</button>
+    <button id="btn-vehicle" title="Entrar/salir del vehículo (E)">🚗</button>
     <button id="btn-camera" title="Cambiar cámara (F)">📷 Cámara</button>
     <button id="btn-power" title="Poder: Super Salto (Q)">⚡ Poder</button>
     <button id="btn-sound" title="Sonido">🔊</button>
@@ -30,6 +35,9 @@
 
   <!-- Info de arma / munición -->
   <div id="ammo">🔫 <span id="ammo-num">12</span> / ∞</div>
+
+  <!-- Velocidad al manejar -->
+  <div id="vehicle-hud" hidden>🚗 <span id="vehicle-speed">0</span> km/h · E para bajar</div>
 
   <!-- Mensaje central temporal -->
   <div id="toast"></div>
@@ -45,27 +53,55 @@
       <button id="tb-break" title="Romper">⛏</button>
       <button id="tb-place" title="Poner bloque">🧱</button>
       <button id="tb-shoot" title="Disparar">🎯</button>
+      <button id="tb-inv" title="Mochila">🎒</button>
+      <button id="tb-car" title="Vehículo">🚗</button>
+    </div>
+  </div>
+
+  <!-- Mochila: inventario + crafteo -->
+  <div id="inventory-screen" hidden>
+    <div class="inv-panel">
+      <div class="inv-header">
+        <h2>🎒 Mochila</h2>
+        <button id="btn-inv-close" title="Cerrar (Esc)">✕</button>
+      </div>
+      <div class="inv-tabs">
+        <button id="tab-inv" class="active">🎒 Mochila</button>
+        <button id="tab-craft">🔨 Crafteo</button>
+      </div>
+      <div id="inv-grid"></div>
+      <div id="craft-grid" hidden></div>
+      <p id="inv-hint">Toca un objeto para usarlo. En el crafteo, si algo tiene 🔒 es que te faltan materiales: pulsa en él y te digo dónde buscarlos.</p>
     </div>
   </div>
 
   <!-- Pantalla de inicio -->
   <div id="start-screen">
     <h1>MY BLOCK</h1>
-    <p class="tagline">¡Construye, dispara y usa tus poderes!</p>
+    <p class="tagline">¡Explora la ciudad, maneja, construye y usa tus poderes!</p>
     <button id="btn-play" class="big">▶ JUGAR</button>
     <button id="btn-how" class="big secondary">❓ CÓMO SE JUEGA</button>
     <div id="how" hidden>
       <h2>Cómo se juega</h2>
-      <p><b>PC:</b> WASD para moverte · ratón para mirar · Espacio para saltar ·
-      clic izquierdo para romper o disparar · clic derecho para poner bloques ·
-      teclas 1-9 para elegir · <b>F</b> cambia la cámara (1.ª / 3.ª persona) ·
-      <b>Q</b> poder Super Salto · <b>R</b> recargar.</p>
+      <p><b>PC:</b> WASD para moverte · ratón para mirar · Espacio para saltar
+      (y nadar hacia arriba en el agua) · clic izquierdo para romper, disparar
+      o dar un puñetazo con la mano · clic derecho para poner bloques ·
+      teclas 1-9 y 0 para elegir · <b>F</b> cambia la cámara (1.ª / 3.ª persona) ·
+      <b>Q</b> poder Super Salto · <b>R</b> recargar · <b>E</b> entrar al auto
+      o la moto (cerca de uno) o abrir la mochila · <b>B</b> mochila.</p>
       <p><b>Móvil:</b> joystick izquierdo para moverte · arrastra a la derecha
-      para mirar · botones para saltar, romper, poner y disparar.</p>
+      para mirar · botones para saltar, romper, poner, disparar, mochila 🎒 y
+      vehículo 🚗.</p>
+      <p>La <b>mano ✋</b> (tecla 1) sirve para atacar y recoger. Al romper
+      bloques caen objetos: camina encima para recogerlos. En la <b>mochila 🎒</b>
+      ves todo lo que tienes (cada cosa una sola vez, con su cantidad) y en
+      <b>🔨 Crafteo</b> creas puertas, ventanas, TV, computadoras, pico y
+      armas nuevas. Si algo tiene 🔒, pulsa y te digo dónde buscar lo que falta.</p>
       <p>Dispara a los monstruos de bloques 👾 con la pistola 🔫. ¡No dejes
-      que te quiten los corazones ❤!</p>
+      que te quiten los corazones ❤! Saluda a Nacho y Dagar por la ciudad 👋,
+      y cuidado con los matones 😠. ¡Y no te olvides de nadar en el mar! 🏖️</p>
     </div>
-    <p class="credit">Un juego estilo Minecraft, hecho para ti · 100% offline</p>
+    <p class="credit">Un juego estilo Minecraft + GTA, hecho para ti · 100% offline</p>
   </div>
 
   <!-- Pausa -->

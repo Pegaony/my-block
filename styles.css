@@ -121,3 +121,97 @@ body.touch .slot { width: 38px; height: 38px; font-size: 16px; }
   #hearts { font-size: 15px; }
   #score { font-size: 12px; }
 }
+
+/* ===== MY BLOCK v2: mochila, crafteo, agua, vehículo ===== */
+#water-overlay {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  background: rgba(20, 90, 200, 0.35); opacity: 0; transition: opacity .2s;
+}
+#water-overlay.on { opacity: 1; }
+
+#vehicle-hud {
+  position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
+  background: rgba(0,0,0,.55); color: #fff; padding: 8px 16px; border-radius: 14px;
+  font-size: 18px; font-weight: bold; z-index: 6; pointer-events: none;
+  border: 2px solid rgba(255,255,255,.5);
+}
+body.touch #vehicle-hud { bottom: 210px; }
+
+#touch-buttons { grid-template-columns: repeat(3, 1fr); }
+
+/* Mochila / crafteo */
+#inventory-screen {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.6); padding: 12px;
+}
+.inv-panel {
+  width: min(680px, 96vw); max-height: 88vh; overflow-y: auto;
+  background: #2b2118; border: 3px solid #8a6b46; border-radius: 16px;
+  color: #fff; padding: 14px;
+}
+.inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.inv-header h2 { font-size: 26px; color: #ffe98a; }
+#btn-inv-close {
+  background: #c0392b; color: #fff; border: 2px solid #fff; border-radius: 10px;
+  font-size: 18px; font-weight: bold; padding: 6px 12px; cursor: pointer;
+}
+.inv-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.inv-tabs button {
+  flex: 1; padding: 10px; font-size: 17px; font-weight: bold; border-radius: 10px;
+  border: 2px solid rgba(255,255,255,.4); background: #4a3a28; color: #fff; cursor: pointer;
+}
+.inv-tabs button.active { background: #43a047; border-color: #ffd23f; }
+#inv-grid, #craft-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px;
+}
+.inv-slot {
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.3);
+  border-radius: 12px; padding: 10px 8px; text-align: center; position: relative;
+}
+.inv-slot .ico { font-size: 34px; display: block; }
+.inv-slot .nm { font-size: 14px; font-weight: bold; display: block; margin-top: 4px; }
+.inv-slot .cnt {
+  position: absolute; top: -8px; right: -6px; background: #ffd23f; color: #222;
+  font-size: 14px; font-weight: bold; border-radius: 10px; padding: 2px 8px;
+  border: 2px solid #fff;
+}
+.inv-slot .use {
+  margin-top: 8px; background: #43a047; color: #fff; border: 2px solid #fff;
+  border-radius: 8px; padding: 5px 10px; font-size: 13px; font-weight: bold; cursor: pointer;
+}
+.inv-slot .owned { margin-top: 8px; font-size: 12px; color: #7dff5e; font-weight: bold; }
+.inv-empty { grid-column: 1 / -1; text-align: center; opacity: .8; padding: 18px 6px; font-size: 15px; line-height: 1.5; }
+
+.recipe {
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.3);
+  border-radius: 12px; padding: 10px 8px; text-align: center; position: relative;
+}
+.recipe .ico { font-size: 34px; display: block; }
+.recipe .nm { font-size: 14px; font-weight: bold; display: block; margin-top: 4px; }
+.recipe .desc { font-size: 12px; opacity: .85; display: block; margin: 4px 0 6px; line-height: 1.35; }
+.recipe .needs { font-size: 12px; line-height: 1.5; text-align: left; }
+.recipe .needs .have { color: #7dff5e; }
+.recipe .needs .miss { color: #ff8a7a; font-weight: bold; }
+.recipe .where { font-size: 11px; opacity: .8; display: block; margin-top: 4px; line-height: 1.4; text-align: left; }
+.recipe .make {
+  margin-top: 8px; background: #43a047; color: #fff; border: 2px solid #fff;
+  border-radius: 8px; padding: 6px 12px; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%;
+}
+.recipe.locked { opacity: .85; border-color: #888; }
+.recipe.locked .make { background: #666; }
+.recipe .lock {
+  position: absolute; top: 6px; right: 8px; font-size: 22px;
+  background: rgba(0,0,0,.55); border-radius: 8px; padding: 2px 6px;
+}
+#inv-hint { margin-top: 12px; font-size: 13px; opacity: .85; line-height: 1.45; }
+
+@media (max-width: 600px) {
+  #inv-grid, #craft-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .inv-header h2 { font-size: 21px; }
+  #vehicle-hud { font-size: 15px; }
+}
+
+/* hotbar: cantidad de objetos en el slot */
+.slot { position: relative; }
+.slot .cnt { position: absolute; bottom: 1px; right: 3px; font-size: 10px; font-weight: 800; color: #ffd23e; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
