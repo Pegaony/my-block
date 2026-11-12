@@ -1,10 +1,15 @@
-// MY BLOCK v1.0.0 — juego voxel estilo Minecraft (Three.js r160)
+// MY BLOCK v2.1.0 — juego voxel estilo Minecraft (Three.js r160)
 // Mundo de bloques, 1.ª/3.ª persona, pistola, poderes, monstruos. 100% offline.
+// v2.1: ciudad grande y realista (96x96, calles anchas con aceras, 18 casas
+//   de 2 plantas con balcones, farolas y árboles), poner bloques con la mano
+//   (usa el último bloque roto) y avisos claros, zombis aislados y poco
+//   frecuentes (máx 2, lejos, casi no persiguen), NPCs más realistas
+//   (cara, pelo, ropa de su oficio).
 import * as THREE from 'three';
 
 // ---------------------------------------------------------------- constantes
-const W = 64, D = 64, H = 24;          // tamaño del mundo en bloques
-const SAVE_KEY = 'myblock-save-v1';
+const W = 96, D = 96, H = 24;          // tamaño del mundo en bloques (v2.1: ciudad grande)
+const SAVE_KEY = 'myblock-save-v2'; // v2.1: la fórmula de índices cambia con W/D, los saves viejos no valen
 const B = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, WOOD: 4, LEAVES: 5, SAND: 6, PLANKS: 7, BRICK: 8, GLASS: 9, TNT: 10, WATER: 11, ASPHALT: 12, SIDEWALK: 13, WHITE: 14, DARK: 15, DOOR: 16, WINDOW: 17, TV: 18, COMPUTER: 19, FIRE: 20 };
 const BLOCK_DEFS = {
   [B.GRASS]:  { name: 'Hierba',  top: [0.42, 0.72, 0.25], side: [0.55, 0.38, 0.24], bottom: [0.55, 0.38, 0.24] },
@@ -65,34 +70,41 @@ function vnoise(x, z) {
 }
 function fbm(x, z) { return vnoise(x, z) * 0.65 + vnoise(x * 2.13, z * 2.13) * 0.35; }
 function groundHeight(x, z) {
-  if (x >= 56 && z >= 8) return x === 56 ? 2 : 1;    // mar: fondo de arena (1-2 de profundidad)
-  if (x >= 52 && z >= 8) return 3;                   // playa
-  if (x >= 28 && x <= 51 && z >= 8 && z <= 47) return 3; // ciudad plana
-  if (x >= 44 && z < 8) return 3;                    // aeropuerto
-  if (x < 12 && z < 12) return 8 + Math.floor(fbm(x * 0.08, z * 0.08) * 5); // montañas 8..12
+  if (x >= 88 && z >= 10) return x === 88 ? 2 : 1; // mar: fondo de arena (1-2 de profundidad)
+  if (x >= 84 && z >= 10) return 3;                // playa
+  if (x >= 30 && x <= 78 && z >= 12 && z <= 76) return 3; // ciudad plana
+  if (x >= 48 && x <= 84 && z < 12) return 3;      // aeropuerto
+  if (x >= 34 && x <= 74 && z >= 80 && z <= 94) return 3; // base militar plana
+  if (x >= 38 && x <= 41 && z >= 77 && z <= 94) return 3; // camino ciudad -> base militar
+  if (x < 14 && z < 20) return 8 + Math.floor(fbm(x * 0.08, z * 0.08) * 5); // montañas 8..12
   return 3 + Math.floor(fbm(x * 0.08, z * 0.08) * 6); // bosque/colinas 3..8
 }
-function inCity(x, z) { return x >= 28 && x <= 51 && z >= 8 && z <= 47; }
+function inCity(x, z) { return x >= 30 && x <= 78 && z >= 12 && z <= 76; }
+// Calles anchas de 4 bloques: 2 verticales (x 38-41 y 58-61) y 3 horizontales
+// (z 24-27, 40-43 y 56-59); las aceras de 1 bloque van pegadas a cada calle.
 function isStreet(x, z) {
   if (!inCity(x, z)) return false;
-  const vx = (x === 32 || x === 33 || x === 40 || x === 41);
-  const hz = (z === 16 || z === 17 || z === 24 || z === 25 || z === 32 || z === 33 || z === 40 || z === 41);
+  const vx = (x >= 38 && x <= 41) || (x >= 58 && x <= 61);
+  const hz = (z >= 24 && z <= 27) || (z >= 40 && z <= 43) || (z >= 56 && z <= 59);
   return vx || hz;
 }
 function isSidewalk(x, z) {
   if (!inCity(x, z) || isStreet(x, z)) return false;
-  const nearV = [31, 34, 39, 42].includes(x);
-  const nearH = [15, 18, 23, 26, 31, 34, 39, 42].includes(z);
+  const nearV = [37, 42, 57, 62].includes(x);
+  const nearH = [23, 28, 39, 44, 55, 60].includes(z);
   return nearV || nearH;
 }
-function isRunway(x, z) { return x >= 44 && x <= 63 && z >= 2 && z <= 5; }
+function isRunway(x, z) { return x >= 50 && x <= 80 && z >= 3 && z <= 5; }
 function topType(x, z, h) {
   if (isRunway(x, z)) return (z === 3 || z === 4) && (x % 4 === 0) ? B.WHITE : B.ASPHALT;
-  if (x >= 52 && z >= 8) return B.SAND;             // playa y fondo del mar
+  if (x >= 40 && x <= 68 && z >= 88 && z <= 91) return (z === 89 || z === 90) && (x % 4 === 0) ? B.WHITE : B.ASPHALT; // pista de la base militar
+  if (x >= 38 && x <= 41 && z >= 77 && z <= 94) return B.ASPHALT; // camino a la base militar
+  if (x >= 34 && x <= 74 && z >= 80 && z <= 94) return B.SIDEWALK; // suelo de hormigón de la base
+  if (x >= 84 && z >= 10) return B.SAND;           // playa y fondo del mar
   if (isStreet(x, z)) return B.ASPHALT;
   if (isSidewalk(x, z)) return B.SIDEWALK;
   if (inCity(x, z)) return B.GRASS;                  // parcelas
-  if (x >= 44 && z < 8) return B.GRASS;              // aeropuerto (fuera de la pista)
+  if (x >= 48 && x <= 84 && z < 12) return B.GRASS; // aeropuerto (fuera de la pista)
   return h <= 3 ? B.SAND : B.GRASS;
 }
 function setGen(x, y, z, t) { // poner bloque al generar el mundo (no se guarda como cambio del jugador)
@@ -107,8 +119,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x79a6ff);
-scene.fog = new THREE.Fog(0x9ec3ff, 40, 110);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
+scene.fog = new THREE.Fog(0x9ec3ff, 60, 170);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 400);
 camera.rotation.order = 'YXZ';
 
 scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x8a6b46, 1.0));
@@ -148,29 +160,198 @@ function generateWorld() {
       blocks[idx(x, y, z)] = t;
     }
     // mar: agua encima del fondo de arena
-    if (x >= 56 && z >= 8) for (let y = h; y <= 2; y++) blocks[idx(x, y, z)] = B.WATER;
-    // árboles solo en el bosque (oeste) y alguno en las aceras
-    if (x < 28 && h > 3 && hash2(x * 7 + 13, z * 7 + 29) < 0.016) {
+    if (x >= 88 && z >= 10) for (let y = h; y <= 2; y++) blocks[idx(x, y, z)] = B.WATER;
+    // árboles del bosque (oeste)
+    if (x < 30 && h > 3 && hash2(x * 7 + 13, z * 7 + 29) < 0.016) {
       const dx = x - W / 2, dz = z - D / 2;
       if (dx * dx + dz * dz > 25) makeTree(x, h, z);
     }
   }
-  // casas modernas de la ciudad (blancas, cristal, terraza, piscina)
-  makeHouse(34, 20, 5, 4, true);   // A — Nacho
-  makeHouse(42, 20, 5, 4, true);   // B — Dagar
-  makeHouse(34, 28, 5, 4, false);  // C — Lucía
-  makeHouse(42, 28, 5, 4, false);  // D — Carlos
-  makeHouse(34, 36, 5, 4, false);  // E — Marta
-  makeHouse(42, 36, 5, 4, false);  // F — Pedro
-  makeHouse(28, 44, 4, 4, false);  // G — Ana
-  makeHouse(48, 44, 4, 4, false);  // H — Luis
-  makeHouse(28, 10, 4, 4, false);  // I — Roco
-  makeHouse(48, 10, 4, 4, false);  // J — Tito
-  // avión aparcado en el aeropuerto + terminal
-  makePlane(54, 3, 6);
-  makeHouse(44, 6, 4, 3, false);   // terminal
+  // 18 casas modernas de 2 plantas (6x5) en las parcelas entre calles.
+  // La parcela central (x 42-57, z 44-55) es la PLAZA — sin casas.
+  makeHouse(31, 13, 6, 5, true);   // A — Nacho
+  makeHouse(43, 13, 6, 5, false);  // B — Dagar
+  makeHouse(50, 13, 6, 5, false);  // C — Lucía
+  makeHouse(63, 13, 6, 5, true);   // D — Carlos
+  makeHouse(71, 13, 6, 5, false);  // E — Marta
+  makeHouse(31, 29, 6, 5, false);  // F — Pedro
+  makeHouse(43, 29, 6, 5, true);   // G — Ana
+  makeHouse(50, 29, 6, 5, false);  // H — Luis
+  makeHouse(63, 29, 6, 5, false);  // I — Roco
+  makeHouse(71, 29, 6, 5, false);  // J — Tito
+  makeHouse(31, 45, 6, 5, false);  // K — casa libre
+  makeHouse(63, 45, 6, 5, true);   // L — casa libre
+  makeHouse(71, 45, 6, 5, false);  // M — casa libre
+  makeHouse(31, 61, 6, 5, false);  // N — casa libre
+  makeHouse(43, 61, 6, 5, false);  // O — casa libre
+  makeHouse(50, 61, 6, 5, true);   // P — casa libre
+  makeHouse(63, 61, 6, 5, false);  // Q — casa libre
+  makeHouse(71, 61, 6, 5, false);  // R — casa libre
+  // avión comercial aparcado en la pista (pilotable, ver initVehicles) + terminal
+  makeHouse(48, 7, 6, 4, false);   // terminal
+  // farolas en las aceras (poste oscuro + lámpara naranja)
+  for (const z of [16, 30, 46, 62, 72]) for (const x of [37, 42, 57, 62]) makeLamp(x, z);
+  for (const x of [34, 50, 66, 74]) for (const z of [23, 28, 39, 44, 55, 60]) makeLamp(x, z);
+  // árboles en las aceras + palmeras en la playa
+  for (const [x, z] of [[37, 20], [42, 36], [57, 52], [62, 68], [34, 60], [50, 23], [66, 44], [74, 28]]) makeTree(x, 3, z);
+  for (const [x, z] of [[85, 20], [86, 34], [85, 48], [86, 62]]) makeTree(x, 3, z);
+  // plaza central: cruce de aceras + bancos + árboles
+  for (let x = 42; x <= 57; x++) { setGen(x, 2, 49, B.SIDEWALK); setGen(x, 2, 50, B.SIDEWALK); }
+  for (let z = 44; z <= 55; z++) { setGen(49, 2, z, B.SIDEWALK); setGen(50, 2, z, B.SIDEWALK); }
+  makeTree(44, 3, 46); makeTree(54, 3, 52);
+  makeBench(46, 49); makeBench(52, 49);
+  makePicnic(47, 52); // mesa de picnic en la plaza (foto 3327)
+  // casa de cristal en el acantilado (foto 3330) — en la montaña del oeste
+  makeCliffHouse();
+  // casa de playa de madera con piscina grande (foto 3331) — en la arena del este
+  flattenArea(79, 52, 87, 68, 3);
+  makeBeachHouse(80, 55);
+  // base militar al sur (x 34-74, z 80-94): hangar, torre, valla, cajas
+  makeHangar(36, 82, 10, 5);
+  makeTower(70, 82);
+  for (let x = 34; x <= 74; x++) { // valla norte (con puerta en el camino x 38-41) y sur
+    if (x < 38 || x > 41) { setGen(x, 3, 80, B.DARK); setGen(x, 4, 80, B.DARK); }
+    setGen(x, 3, 94, B.DARK); setGen(x, 4, 94, B.DARK);
+  }
+  for (let z = 80; z <= 94; z++) { // vallas este y oeste
+    setGen(34, 3, z, B.DARK); setGen(34, 4, z, B.DARK);
+    setGen(74, 3, z, B.DARK); setGen(74, 4, z, B.DARK);
+  }
+  for (const [x, z] of [[44, 87], [45, 87], [46, 87], [66, 84], [67, 84], [36, 88], [36, 89]]) setGen(x, 3, z, B.WOOD); // cajas
+  for (const [x, z] of [[70, 90], [71, 90]]) setGen(x, 3, z, B.DARK); // barreras
   // aplicar lo guardado (lo construido/roto por el jugador)
   for (const k of Object.keys(modified)) blocks[k] = modified[k];
+}
+function makeLamp(x, z) { // farola: poste oscuro + lámpara naranja
+  setGen(x, 3, z, B.DARK); setGen(x, 4, z, B.DARK); setGen(x, 5, z, B.FIRE);
+}
+function makeBench(x, z) { // banco de la plaza: asiento de tablón + respaldo
+  setGen(x, 3, z, B.PLANKS); setGen(x + 1, 3, z, B.PLANKS);
+  setGen(x, 4, z + 1, B.PLANKS); setGen(x + 1, 4, z + 1, B.PLANKS);
+}
+function flattenArea(x1, z1, x2, z2, h) { // aplanar un rectángulo a altura h (casa de playa)
+  for (let x = x1; x <= x2; x++) for (let z = z1; z <= z2; z++) {
+    for (let y = h; y < H; y++) setGen(x, y, z, B.AIR);
+    for (let y = 0; y < h; y++) if (getBlock(x, y, z) === B.AIR) setGen(x, y, z, y === h - 1 ? B.SAND : B.DIRT);
+  }
+}
+// casa de cristal en el acantilado (foto 3330): paredes de cristal con marcos
+// oscuros, losas blancas, deck de madera y piscina infinita mirando al atardecer
+function makeCliffHouse() {
+  let top = 0;
+  for (let x = 5; x <= 13; x++) for (let z = 9; z <= 17; z++) top = Math.max(top, groundHeight(x, z));
+  // plataforma de piedra en la cima de la montaña (x 4..14, z 8..18)
+  for (let x = 4; x <= 14; x++) for (let z = 8; z <= 18; z++) {
+    for (let y = top; y < H; y++) setGen(x, y, z, B.AIR);
+    for (let y = 0; y < top; y++) if (getBlock(x, y, z) === B.AIR) setGen(x, y, z, B.STONE);
+  }
+  const x0 = 7, z0 = 10, w = 6, d = 6, baseY = top;
+  // escalera de piedra por el lado este (para subir a la plataforma)
+  const hEast = groundHeight(15, 12);
+  for (let s = 0; s < 8; s++) {
+    const sx = 15 + s, sy = top - 1 - s;
+    if (sy < hEast) break; // ya llegamos al suelo
+    setGen(sx, sy, 12, B.STONE); setGen(sx, sy, 13, B.STONE);
+    for (let y = 0; y < sy; y++) { if (getBlock(sx, y, 12) === B.AIR) setGen(sx, y, 12, B.STONE); if (getBlock(sx, y, 13) === B.AIR) setGen(sx, y, 13, B.STONE); }
+  }
+  // 2 plantas de cristal con columnas oscuras
+  for (const y0 of [0, 4]) {
+    for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) {
+      const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
+      if (!edge) continue;
+      const corner = (x === x0 || x === x0 + w - 1) && (z === z0 || z === z0 + d - 1);
+      setGen(x, baseY + y, z, corner ? B.DARK : B.GLASS);
+    }
+  }
+  // losa blanca entre plantas + techo con voladizo y barandilla de cristal
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 - 1; z <= z0 + d; z++) setGen(x, baseY + 3, z, B.WHITE);
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 - 1; z <= z0 + d; z++) setGen(x, baseY + 7, z, B.WHITE);
+  for (let x = x0 - 1; x <= x0 + w; x++) { setGen(x, baseY + 8, z0 - 1, B.GLASS); setGen(x, baseY + 8, z0 + d, B.GLASS); }
+  for (let z = z0 - 1; z <= z0 + d; z++) { setGen(x0 - 1, baseY + 8, z, B.GLASS); setGen(x0 + w, baseY + 8, z, B.GLASS); }
+  // puerta al este (da a la escalera)
+  setGen(x0 + w - 1, baseY, z0 + 2, B.DOOR);
+  setGen(x0 + w - 1, baseY + 1, z0 + 2, B.DOOR);
+  // interior vacío (sin tocar la losa de la 2.ª planta) + suelo de tablón
+  for (const y0 of [0, 4]) for (let y = y0; y < y0 + 3; y++) for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY + y, z, B.AIR);
+  for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.PLANKS);
+  // deck de madera al oeste (mirando al atardecer) + piscina infinita en el borde
+  for (let x = x0 - 3; x < x0; x++) for (let z = z0; z < z0 + d; z++) setGen(x, baseY - 1, z, B.PLANKS);
+  for (let x = x0 - 3; x < x0 - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.WATER);
+  for (let x = x0 - 3; x < x0 - 1; x++) { setGen(x, baseY - 1, z0, B.WHITE); setGen(x, baseY - 1, z0 + d - 1, B.WHITE); }
+  for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x0 - 1, baseY - 1, z, B.WHITE);
+  // faroles en el deck
+  setGen(x0 - 3, baseY, z0, B.DARK); setGen(x0 - 3, baseY + 1, z0, B.FIRE);
+  setGen(x0 - 3, baseY, z0 + d - 1, B.DARK); setGen(x0 - 3, baseY + 1, z0 + d - 1, B.FIRE);
+}
+// casa de playa de madera con piscina grande (foto 3331): 2 plantas, cristal
+// al mar y al frente, balcón, techo escalonado de madera, tumbonas y palmeras
+function makeBeachHouse(x0, z0) {
+  const baseY = 3, w = 7, d = 6;
+  for (let y = 0; y < 6; y++) for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) {
+    const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
+    if (!edge) continue;
+    let t = B.WOOD;
+    if (y === 3) t = B.DARK; // franja entre plantas
+    else if (y === 1 || y === 2 || y === 4 || y === 5) {
+      if (x === x0 + w - 1 && z !== z0 && z !== z0 + d - 1) t = B.GLASS; // cristal al mar (este)
+      else if (z === z0 + d - 1 && x !== x0 && x !== x0 + w - 1) t = B.GLASS; // cristal al frente (sur)
+    }
+    if (z === z0 + d - 1 && x === x0 + 3 && y < 2) t = B.DOOR; // puerta al frente
+    setGen(x, baseY + y, z, t);
+  }
+  // balcón al sur (2.ª planta) con barandilla de cristal
+  for (let x = x0 + 1; x < x0 + w - 1; x++) { setGen(x, baseY + 3, z0 + d, B.PLANKS); setGen(x, baseY + 4, z0 + d, B.GLASS); }
+  setGen(x0 + 3, baseY + 4, z0 + d - 1, B.DOOR); setGen(x0 + 3, baseY + 5, z0 + d - 1, B.DOOR); // puerta del balcón
+  // techo escalonado de madera (foto 3331)
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 - 1; z <= z0 + 2; z++) setGen(x, baseY + 6, z, B.PLANKS);
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 + 3; z <= z0 + d; z++) setGen(x, baseY + 7, z, B.PLANKS);
+  // interior vacío + suelo de tablón
+  for (let y = 0; y < 6; y++) for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY + y, z, B.AIR);
+  for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.PLANKS);
+  // piscina grande 6x4 al sur de la casa, con borde blanco
+  for (let x = x0; x < x0 + 6; x++) for (let z = z0 + d + 1; z < z0 + d + 5; z++) { setGen(x, 1, z, B.WHITE); setGen(x, 2, z, B.WATER); }
+  for (let x = x0 - 1; x < x0 + 7; x++) { setGen(x, 2, z0 + d, B.WHITE); setGen(x, 2, z0 + d + 5, B.WHITE); }
+  for (let z = z0 + d; z < z0 + d + 6; z++) { setGen(x0 - 1, 2, z, B.WHITE); setGen(x0 + 6, 2, z, B.WHITE); }
+  // tumbonas blancas junto a la piscina + palmeras alrededor
+  setGen(x0 + 1, 3, z0 + d + 6, B.WHITE); setGen(x0 + 2, 3, z0 + d + 6, B.WHITE);
+  setGen(x0 + 4, 3, z0 + d + 6, B.WHITE); setGen(x0 + 5, 3, z0 + d + 6, B.WHITE);
+  makeTree(x0 - 2, 3, z0 - 1); makeTree(x0 + w, 3, z0 - 1);
+  makeTree(x0 - 2, 3, z0 + d + 5); makeTree(x0 + w, 3, z0 + d + 5);
+}
+// mesa de picnic en la plaza (foto 3327): mesa + bancos + faroles + arbustos
+function makePicnic(x, z) {
+  setGen(x, 3, z, B.DARK); setGen(x + 1, 3, z, B.DARK); // patas
+  setGen(x, 4, z, B.PLANKS); setGen(x + 1, 4, z, B.PLANKS); // mesa
+  setGen(x, 3, z - 1, B.PLANKS); setGen(x + 1, 3, z - 1, B.PLANKS); // banco norte
+  setGen(x, 3, z + 1, B.PLANKS); setGen(x + 1, 3, z + 1, B.PLANKS); // banco sur
+  setGen(x - 2, 3, z, B.WOOD); setGen(x - 2, 4, z, B.FIRE); // farol oeste
+  setGen(x + 4, 3, z + 2, B.WOOD); setGen(x + 4, 4, z + 2, B.FIRE); // farol este
+  setGen(x - 2, 3, z + 2, B.LEAVES); setGen(x + 4, 3, z - 1, B.LEAVES); // arbustos con flores
+}
+// hangar de la base militar: paredes blancas, techo oscuro, puerta grande al sur
+function makeHangar(x0, z0, w, d) {
+  const baseY = 3, Hh = 5;
+  for (let y = 0; y < Hh; y++) for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) {
+    const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
+    if (!edge) continue;
+    if (z === z0 + d - 1 && x >= x0 + 3 && x <= x0 + 6 && y < 4) continue; // puerta grande
+    setGen(x, baseY + y, z, y === Hh - 1 ? B.DARK : B.WHITE);
+  }
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 - 1; z <= z0 + d; z++) setGen(x, baseY + Hh, z, B.DARK); // techo
+  for (let y = 0; y < Hh; y++) for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY + y, z, B.AIR);
+  for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.SIDEWALK);
+}
+// torre de vigilancia de la base militar
+function makeTower(x0, z0) {
+  for (let y = 3; y <= 6; y++) {
+    setGen(x0, y, z0, B.DARK); setGen(x0 + 2, y, z0, B.DARK);
+    setGen(x0, y, z0 + 2, B.DARK); setGen(x0 + 2, y, z0 + 2, B.DARK);
+  }
+  for (let x = x0; x <= x0 + 2; x++) for (let z = z0; z <= z0 + 2; z++) setGen(x, 7, z, B.PLANKS); // suelo de la cabina
+  for (let x = x0; x <= x0 + 2; x++) for (let z = z0; z <= z0 + 2; z++) {
+    if (x === x0 || x === x0 + 2 || z === z0 || z === z0 + 2) setGen(x, 8, z, B.WINDOW); // cabina de cristal
+  }
+  for (let x = x0 - 1; x <= x0 + 3; x++) for (let z = z0 - 1; z <= z0 + 3; z++) setGen(x, 9, z, B.DARK); // techo
 }
 function makeTree(x, h, z) {
   for (let y = h; y < h + 4; y++) setGen(x, y, z, B.WOOD);
@@ -181,7 +362,8 @@ function makeTree(x, h, z) {
   }
   if (inBounds(x, h + 6, z)) setGen(x, h + 6, z, B.LEAVES);
 }
-// casa moderna (estilo de las fotos): blanca, cristal, puerta, techo plano, piscina
+// casa moderna (estilo de las fotos): blanca, cristal, puerta, balcón con
+// barandilla, techo plano con voladizo y terraza, piscina en el patio trasero
 function makeHouse(x0, z0, w, d, pool) {
   const baseY = 3, H1 = 3, H2 = 3;
   for (let y = 0; y < H1 + H2; y++) {
@@ -189,41 +371,68 @@ function makeHouse(x0, z0, w, d, pool) {
       const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
       if (!edge) continue;
       let t = B.WHITE;
-      if (z === z0 && x === x0 + 1 && y < 2) t = B.DOOR; // puerta al frente
+      if (y === H1) t = B.DARK; // franja oscura entre plantas
+      if ((x === x0 || x === x0 + w - 1) && (z === z0 || z === z0 + d - 1) && y >= 1 && y <= 4) t = B.DARK; // columnas oscuras en las esquinas (fotos)
+      if (z === z0 && x === x0 + 2 && y < 2) t = B.DOOR; // puerta al frente
+      else if (z === z0 && y >= 3 && y <= 4 && x !== x0 && x !== x0 + w - 1) t = B.GLASS; // ventanal de cristal en el frente, 2.ª planta (fotos)
       else if (y === 1 || y === 4) {
         if ((x === x0 || x === x0 + w - 1) && z !== z0 && z !== z0 + d - 1) t = B.WINDOW;
         else if (z === z0 + d - 1 && x !== x0 && x !== x0 + w - 1) t = B.WINDOW;
         else if (z === z0 && x !== x0 && x !== x0 + w - 1 && y === 4) t = B.WINDOW;
       }
-      if (y === H1) t = B.DARK; // franja oscura entre plantas
       setGen(x, baseY + y, z, t);
     }
   }
-  for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) setGen(x, baseY + H1 + H2, z, B.WHITE); // techo
-  for (let y = 0; y < H1 + H2; y++) for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY + y, z, B.AIR); // interior
-  for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.PLANKS); // suelo
-  if (pool) { // piscina 3x2 delante de la casa (a la derecha de la puerta)
-    for (let x = x0 + 2; x < x0 + 5; x++) for (let z = z0 - 2; z < z0; z++) {
+  // marcos oscuros alrededor de las ventanas (alfeizar y dintel)
+  for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) {
+    const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
+    if (!edge) continue;
+    for (const wy of [1, 4]) {
+      if (getBlock(x, baseY + wy, z) !== B.WINDOW) continue;
+      for (const dy of [-1, 1]) {
+        const yy = baseY + wy + dy;
+        if (getBlock(x, yy, z) === B.WHITE) setGen(x, yy, z, B.DARK);
+      }
+    }
+  }
+  // puerta del balcón (2.ª planta, sobre la plataforma) + camino de piedra a la puerta
+  setGen(x0 + 2, baseY + 4, z0, B.DOOR);
+  setGen(x0 + 2, baseY + 5, z0, B.DOOR);
+  setGen(x0 + 2, baseY - 1, z0 - 1, B.SIDEWALK);
+  setGen(x0 + 2, baseY - 1, z0 - 2, B.SIDEWALK);
+  // faroles a los lados de la entrada (foto de la villa)
+  setGen(x0, baseY, z0 - 1, B.DARK); setGen(x0, baseY + 1, z0 - 1, B.FIRE);
+  setGen(x0 + w - 1, baseY, z0 - 1, B.DARK); setGen(x0 + w - 1, baseY + 1, z0 - 1, B.FIRE);
+  // balcón: plataforma de tablón con barandilla de cristal y 2 pilares
+  for (let x = x0 + 1; x < x0 + w - 1; x++) {
+    setGen(x, baseY + H1, z0 - 1, B.PLANKS);
+    setGen(x, baseY + H1 + 1, z0 - 1, B.GLASS);
+  }
+  for (let y = baseY; y < baseY + H1; y++) {
+    setGen(x0 + 1, y, z0 - 1, B.WHITE);
+    setGen(x0 + w - 2, y, z0 - 1, B.WHITE);
+  }
+  // techo plano con voladizo + barandilla de cristal en la terraza
+  for (let x = x0 - 1; x <= x0 + w; x++) for (let z = z0 - 1; z <= z0 + d; z++) setGen(x, baseY + H1 + H2, z, B.WHITE);
+  for (let x = x0 - 1; x <= x0 + w; x++) { setGen(x, baseY + H1 + H2 + 1, z0 - 1, B.GLASS); setGen(x, baseY + H1 + H2 + 1, z0 + d, B.GLASS); }
+  for (let z = z0 - 1; z <= z0 + d; z++) { setGen(x0 - 1, baseY + H1 + H2 + 1, z, B.GLASS); setGen(x0 + w, baseY + H1 + H2 + 1, z, B.GLASS); }
+  // terraza en el techo: paneles solares, bancos y un farol (foto de la villa)
+  for (let x = x0 + 1; x <= x0 + 2; x++) for (let z = z0 + 1; z <= z0 + 2; z++) setGen(x, baseY + H1 + H2 + 1, z, B.DARK);
+  setGen(x0 + 3, baseY + H1 + H2 + 1, z0 + 2, B.PLANKS);
+  setGen(x0 + 4, baseY + H1 + H2 + 1, z0 + 2, B.PLANKS);
+  setGen(x0 + 1, baseY + H1 + H2 + 1, z0 + 3, B.FIRE);
+  // interior vacío + suelo de tablón
+  for (let y = 0; y < H1 + H2; y++) for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY + y, z, B.AIR);
+  for (let x = x0 + 1; x < x0 + w - 1; x++) for (let z = z0 + 1; z < z0 + d - 1; z++) setGen(x, baseY - 1, z, B.PLANKS);
+  if (pool) { // piscina 3x2 en el patio trasero (lado alto-z) con borde blanco
+    for (let x = x0 + 1; x < x0 + 4; x++) for (let z = z0 + d; z < z0 + d + 2; z++) {
       setGen(x, 1, z, B.WHITE);
       setGen(x, 2, z, B.WATER);
     }
-    for (let x = x0 + 1; x < x0 + 6; x++) { setGen(x, 2, z0 - 3, B.WHITE); setGen(x, 2, z0, B.WHITE); }
-    setGen(x0 + 1, 2, z0 - 2, B.WHITE); setGen(x0 + 1, 2, z0 - 1, B.WHITE);
-    setGen(x0 + 5, 2, z0 - 2, B.WHITE); setGen(x0 + 5, 2, z0 - 1, B.WHITE);
+    for (let x = x0; x < x0 + 5; x++) { setGen(x, 2, z0 + d - 1, B.WHITE); setGen(x, 2, z0 + d + 2, B.WHITE); }
+    for (let z = z0 + d - 1; z < z0 + d + 3; z++) { setGen(x0, 2, z, B.WHITE); setGen(x0 + 4, 2, z, B.WHITE); }
   }
 }
-// avión aparcado (decoración; manejable en la fase 3)
-function makePlane(x0, y0, z0) {
-  for (let x = x0; x < x0 + 9; x++) for (let z = z0; z < z0 + 3; z++) {
-    setGen(x, y0, z, B.WHITE); setGen(x, y0 + 1, z, B.WHITE);
-    if (z === z0 + 1) { setGen(x, y0 + 1, z, B.DARK); } // franja de ventanas
-  }
-  setGen(x0 + 9, y0, z0 + 1, B.DARK); // morro
-  for (let z = z0 - 4; z <= z0 + 6; z++) { setGen(x0 + 4, y0, z, B.WHITE); } // alas
-  for (let y = y0; y < y0 + 3; y++) setGen(x0, y, z0 + 1, B.WHITE); // cola
-  setGen(x0, y0 + 2, z0, B.DARK); setGen(x0, y0 + 2, z0 + 2, B.DARK);
-}
-
 // ---------------------------------------------------------------- mallado (solo caras visibles)
 const FACES = [
   { dir: [1, 0, 0],  shade: 0.80, c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
@@ -458,24 +667,33 @@ function setCameraMode(m) {
 
 // ---------------------------------------------------------------- personaje de bloques (visible en 3.ª persona)
 const character = new THREE.Group();
-{
+{ // v2.1: igual que los NPCs — cara, manos y zapatos, extremidades con pivote en hombro/cadera
   const skin = new THREE.MeshLambertMaterial({ color: 0xf2c184 });
   const shirt = new THREE.MeshLambertMaterial({ color: 0x2f6fd6 });
   const pants = new THREE.MeshLambertMaterial({ color: 0x2b2b44 });
   const hair = new THREE.MeshLambertMaterial({ color: 0x3a2314 });
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin);
-  head.position.y = 1.55;
-  const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.14, 0.52), hair);
-  hairTop.position.y = 1.84;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.3), shirt);
-  torso.position.y = 1.04;
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.66, 0.2), shirt);
-  armL.position.set(-0.39, 1.04, 0);
-  const armR = armL.clone(); armR.position.x = 0.39;
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.68, 0.24), pants);
-  legL.position.set(-0.14, 0.34, 0);
-  const legR = legL.clone(); legR.position.x = 0.14;
-  character.add(head, hairTop, torso, armL, armR, legL, legR);
+  const dark = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); character.add(m); return m; };
+  box(0.5, 0.5, 0.5, skin, 0, 1.55, 0);
+  box(0.07, 0.09, 0.02, dark, -0.11, 1.6, 0.26);
+  box(0.07, 0.09, 0.02, dark, 0.11, 1.6, 0.26);
+  box(0.14, 0.03, 0.02, new THREE.MeshLambertMaterial({ color: 0x7a3b2e }), 0, 1.44, 0.26);
+  box(0.52, 0.14, 0.52, hair, 0, 1.84, 0);
+  box(0.56, 0.72, 0.3, shirt, 0, 1.04, 0);
+  const armL = new THREE.Group(); armL.position.set(-0.39, 1.38, 0);
+  const armR = new THREE.Group(); armR.position.set(0.39, 1.38, 0);
+  for (const arm of [armL, armR]) {
+    const up = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.42, 0.2), shirt); up.position.y = -0.21; arm.add(up);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.2), skin); hand.position.y = -0.5; arm.add(hand);
+    character.add(arm);
+  }
+  const legL = new THREE.Group(); legL.position.set(-0.14, 0.7, 0);
+  const legR = new THREE.Group(); legR.position.set(0.14, 0.7, 0);
+  for (const leg of [legL, legR]) {
+    const lp = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), pants); lp.position.y = -0.25; leg.add(lp);
+    const sh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.34), dark); sh.position.set(0, -0.56, 0.04); leg.add(sh);
+    character.add(leg);
+  }
   character.userData = { armL, armR, legL, legR };
   character.visible = false;
   scene.add(character);
@@ -679,6 +897,10 @@ function updateParticles(dt) {
 // ---------------------------------------------------------------- monstruos
 const mobs = [];
 const mobMeshes = [];
+// v2.1: los monstruos aparecen AISLADOS y poco frecuentes — un zombi de vez en
+// cuando, lejos del jugador, que deambula sin perseguir salvo que te acerques mucho.
+const MAX_MOBS = 2;        // máximo 2 activos a la vez
+const MOB_CHASE_DIST = 8;  // solo persigue si estás a menos de 8 bloques
 function makeMobMesh(kind) {
   const g = new THREE.Group();
   const body = kind === 'zombie'
@@ -715,18 +937,23 @@ function spawnMob(i) {
   m.group.add(mesh);
   m.hp = 3; m.alive = true; m.attackCd = 0; m.respawnAt = 0; m.wander = new THREE.Vector3();
   m.group.visible = true;
-  // posición en un anillo alrededor del jugador (12-20 bloques)
-  const ang = Math.random() * Math.PI * 2;
-  const r = 12 + Math.random() * 8;
-  let x = Math.max(2, Math.min(W - 3, player.pos.x + Math.cos(ang) * r));
-  let z = Math.max(2, Math.min(D - 3, player.pos.z + Math.sin(ang) * r));
+  // posición en un anillo LEJOS del jugador (25-35 bloques), nunca encima
+  let x = 0, z = 0;
+  for (let tries = 0; tries < 6; tries++) {
+    const ang = Math.random() * Math.PI * 2;
+    const r = 25 + Math.random() * 10;
+    x = Math.max(2, Math.min(W - 3, player.pos.x + Math.cos(ang) * r));
+    z = Math.max(2, Math.min(D - 3, player.pos.z + Math.sin(ang) * r));
+    if (getBlock(Math.floor(x), 2, Math.floor(z)) !== B.WATER) break; // no aparecer en el mar
+  }
   m.group.position.set(x, topSolidY(Math.floor(x), Math.floor(z)), z);
   for (const c of mesh.children) { c.userData.mob = m; mobMeshes.push(c); }
 }
 for (let i = 0; i < 6; i++) {
   const g = new THREE.Group();
   scene.add(g);
-  mobs.push({ group: g, hp: 3, alive: false, attackCd: 0, respawnAt: performance.now() + i * 1200, kind: 'zombie', wander: new THREE.Vector3() });
+  // primera aparición: el 1.º a los 8 s, el 2.º a los ~25 s, el resto mucho después
+  mobs.push({ group: g, hp: 3, alive: false, attackCd: 0, respawnAt: performance.now() + 8000 + i * 15000, kind: 'zombie', wander: new THREE.Vector3() });
 }
 function damageMob(mob, dmg, point) {
   if (!mob.alive) return;
@@ -735,7 +962,7 @@ function damageMob(mob, dmg, point) {
   if (mob.hp <= 0) {
     mob.alive = false;
     mob.group.visible = false;
-    mob.respawnAt = performance.now() + 8000;
+    mob.respawnAt = performance.now() + 20000 + Math.random() * 20000; // reaparece en 20-40 s
     spawnParticles(mob.group.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x88ff88, 16);
     score++;
     renderScore();
@@ -747,21 +974,23 @@ function updateMobs(dt, now) {
   for (let i = 0; i < mobs.length; i++) {
     const m = mobs[i];
     if (!m.alive) {
-      if (now >= m.respawnAt) spawnMob(i);
+      // solo reaparece si hay menos de MAX_MOBS activos (nada de oleadas)
+      if (now >= m.respawnAt && mobs.filter((mm) => mm.alive).length < MAX_MOBS) spawnMob(i);
       continue;
     }
     const p = m.group.position;
     const toPlayer = new THREE.Vector3(player.pos.x - p.x, 0, player.pos.z - p.z);
     const dist = toPlayer.length();
     let mx = 0, mz = 0;
-    if (dist < 26 && dist > 0.01) { mx = toPlayer.x / dist; mz = toPlayer.z / dist; }
+    if (dist < MOB_CHASE_DIST && dist > 0.01) { mx = toPlayer.x / dist; mz = toPlayer.z / dist; }
     else {
-      if (m.wander.lengthSq() < 0.01 || Math.random() < 0.005) {
+      // deambular sin rumbo, cambiando de dirección a menudo
+      if (m.wander.lengthSq() < 0.01 || Math.random() < 0.02) {
         m.wander.set(Math.random() * 2 - 1, 0, Math.random() * 2 - 1).normalize().multiplyScalar(0.5);
       }
       mx = m.wander.x; mz = m.wander.z;
     }
-    const sp = dist < 26 ? 1.6 : 0.7;
+    const sp = dist < MOB_CHASE_DIST ? 1.2 : 0.6;
     p.x += mx * sp * dt; p.z += mz * sp * dt;
     p.x = Math.max(1, Math.min(W - 2, p.x));
     p.z = Math.max(1, Math.min(D - 2, p.z));
@@ -829,25 +1058,53 @@ function breakBlock(maxDist = 6) {
   const vox = currentTarget(maxDist);
   if (!vox) return false;
   if (vox.block === B.TNT) { explode(vox.x, vox.y, vox.z); return true; }
+  lastBroken = vox.block; // para poner con la mano el último bloque roto (v2.1)
   dropForBlock(vox.block, vox.x + 0.5, vox.y + 0.5, vox.z + 0.5);
   setBlock(vox.x, vox.y, vox.z, B.AIR);
   rebuildMesh(); saveWorld(); sfx.break();
   spawnParticles(new THREE.Vector3(vox.x + 0.5, vox.y + 0.5, vox.z + 0.5), 0xaaaaaa, 6);
   return true;
 }
+// v2.1: poner bloques siempre funciona si hay algo que poner. Con la Mano se
+// pone el último bloque roto/recogido; si no hay ninguno, se avisa en pantalla.
+let lastBroken = B.GRASS; // último bloque roto (para poner con la mano)
+let lastPlaceError = '';
+let lastFailToast = 0;
+function failToast(msg) {
+  lastPlaceError = msg;
+  const now = performance.now();
+  if (now - lastFailToast < 1500) return; // no spamear el aviso
+  lastFailToast = now;
+  toast(msg, 2200);
+}
 function placeBlock() {
   const slot = allSlots()[selectedSlot];
-  if (!slot || slot.kind !== 'block') return false;
-  if (slot.item && (inv[slot.item] || 0) <= 0) { toast(`No te quedan ${slot.name.toLowerCase()}s, crea más en 🔨 Crafteo`); return false; }
+  let type = null, itemId = null;
+  if (slot && slot.kind === 'block') { type = slot.id; itemId = slot.item || null; }
+  else if (slot && slot.kind === 'hand') {
+    // con la mano: poner el último bloque roto (si es de la barra, es infinito)
+    const def = HOTBAR.find((s) => s.kind === 'block' && s.id === lastBroken);
+    if (def) { type = lastBroken; itemId = null; }
+    else {
+      // ¿es un bloque creado (puerta, ventana, TV...) que tienes en la mochila?
+      const itemEntry = Object.entries(ITEMS).find(([, d]) => d.block === lastBroken);
+      if (itemEntry && (inv[itemEntry[0]] || 0) > 0) { type = lastBroken; itemId = itemEntry[0]; }
+      else { failToast('✋ Elige un bloque en la barra para ponerlo 🧱'); return false; }
+    }
+  } else if (slot && slot.kind === 'gun') {
+    failToast('🔫 Con el arma no se ponen bloques: elige un bloque de la barra 🧱');
+    return false;
+  } else return false;
+  if (itemId && (inv[itemId] || 0) <= 0) { toast(`No te quedan ${ITEMS[itemId].name.toLowerCase()}s, crea más en 🔨 Crafteo`); return false; }
   const vox = currentTarget();
-  if (!vox) return false;
+  if (!vox) { failToast('🎯 Apunta a un bloque para poner otro al lado'); return false; }
   const x = vox.x + vox.nx, y = vox.y + vox.ny, z = vox.z + vox.nz;
-  if (!inBounds(x, y, z) || getBlock(x, y, z) !== B.AIR) return false;
+  if (!inBounds(x, y, z) || getBlock(x, y, z) !== B.AIR) { failToast('🧱 Ahí no cabe el bloque'); return false; }
   // no poner el bloque dentro del jugador
   const p = player.pos;
-  if (x + 1 > p.x - 0.3 && x < p.x + 0.3 && z + 1 > p.z - 0.3 && z < p.z + 0.3 && y + 1 > p.y && y < p.y + 1.8) return false;
-  setBlock(x, y, z, slot.id);
-  if (slot.item) { inv[slot.item]--; saveWorld(); renderHotbar(); if (state === 'inventory') renderInventory(); }
+  if (x + 1 > p.x - 0.3 && x < p.x + 0.3 && z + 1 > p.z - 0.3 && z < p.z + 0.3 && y + 1 > p.y && y < p.y + 1.8) { failToast('🧱 Ahí no cabe el bloque'); return false; }
+  setBlock(x, y, z, type);
+  if (itemId) { inv[itemId]--; saveWorld(); renderHotbar(); if (state === 'inventory') renderInventory(); }
   rebuildMesh(); saveWorld(); sfx.place();
   return true;
 }
@@ -868,6 +1125,7 @@ function punch() {
   return breakBlock(3); // si no hay monstruo, rompe el bloque apuntado
 }
 function primaryAction() {
+  if (driving && driving.type === 'tank') return fireTank(); // el cañón del tanque manda
   const s = allSlots()[selectedSlot];
   if (s.kind === 'gun') shoot();
   else if (s.kind === 'hand') punch();
@@ -1010,7 +1268,7 @@ function bindHold(id, down, up) {
 bindHold('tb-jump', () => { input.jump = true; setTimeout(() => { input.jump = false; }, 180); });
 bindHold('tb-break', () => breakBlock());
 bindHold('tb-place', () => placeBlock());
-bindHold('tb-shoot', () => shoot());
+bindHold('tb-shoot', () => primaryAction()); // 🎯 = acción principal (disparar, puñetazo o cañón del tanque)
 bindHold('tb-inv', () => { if (state === 'playing') openInventory(); });
 bindHold('tb-car', () => { if (state === 'playing') { if (driving) exitVehicle(); else tryEnterVehicle(); } });
 
@@ -1097,6 +1355,7 @@ function resumeGame() {
 
 // ---------------------------------------------------------------- bucle principal
 const clock = new THREE.Clock();
+const skyPlanes = []; // aviones volando en el cielo (declarado aquí: animate() lo usa cada frame)
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -1120,6 +1379,7 @@ function animate() {
     }
     if (tracer && now > tracerUntil) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   }
+  updateSkyPlanes(dt); // los aviones del cielo vuelan siempre, también en el menú
   // personaje (3.ª persona) sigue al jugador
   character.position.copy(player.pos);
   character.rotation.y = player.yaw;
@@ -1390,63 +1650,221 @@ function updatePickups(dt) {
 
 // ---------------------------------------------------------------- v2: vehículos
 const vehicles = [];
+// v2.1: carro realista — carrocería con capó y maletero, cabina de cristal,
+// techo, ruedas con tapacubos, faros, luces traseras, parrilla, parachoques y espejos
 function makeCarMesh(color) {
   const g = new THREE.Group();
   const body = new THREE.MeshLambertMaterial({ color });
   const dark = new THREE.MeshLambertMaterial({ color: 0x222226 });
   const glass = new THREE.MeshLambertMaterial({ color: 0x9ec3e8 });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 3.2), body);
-  base.position.y = 0.55;
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.6), glass);
-  cabin.position.set(0, 1.05, 0.1);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 1.6), body);
-  roof.position.set(0, 1.32, 0.1);
-  g.add(base, cabin, roof);
-  for (const [wx, wz] of [[-0.8, -1.1], [0.8, -1.1], [-0.8, 1.1], [0.8, 1.1]]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.55, 0.55), dark);
-    w.position.set(wx, 0.28, wz);
-    g.add(w);
+  const chrome = new THREE.MeshLambertMaterial({ color: 0xcfd6dd });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  box(1.8, 0.5, 3.4, body, 0, 0.55, 0); // carrocería baja
+  box(1.7, 0.32, 1.0, body, 0, 0.9, -1.1); // capó
+  box(1.7, 0.32, 0.8, body, 0, 0.9, 1.25); // maletero
+  box(1.5, 0.55, 1.5, glass, 0, 1.12, 0.15); // cabina de cristal
+  box(1.55, 0.08, 1.55, body, 0, 1.42, 0.15); // techo
+  for (const [px, pz] of [[-0.72, -0.55], [0.72, -0.55], [-0.72, 0.85], [0.72, 0.85]]) box(0.08, 0.55, 0.08, dark, px, 1.12, pz); // pilares
+  box(1.84, 0.16, 0.18, dark, 0, 0.32, -1.72); // parachoques delantero
+  box(1.84, 0.16, 0.18, dark, 0, 0.32, 1.72); // parachoques trasero
+  box(0.9, 0.16, 0.06, dark, 0, 0.55, -1.72); // parrilla
+  for (const lx of [-0.95, 0.95]) box(0.14, 0.1, 0.06, dark, lx, 1.05, -0.5); // espejos
+  for (const lx of [-0.55, 0.55]) {
+    box(0.38, 0.13, 0.06, new THREE.MeshLambertMaterial({ color: 0xffe27a }), lx, 0.62, -1.73); // faros
+    box(0.38, 0.13, 0.06, new THREE.MeshLambertMaterial({ color: 0xd62f2f }), lx, 0.62, 1.73); // luces traseras
+    box(0.3, 0.1, 0.04, new THREE.MeshLambertMaterial({ color: 0xffffff }), lx, 0.45, 1.74); // placa
   }
-  for (const lx of [-0.5, 0.5]) {
-    const light = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.06), new THREE.MeshLambertMaterial({ color: 0xffe27a }));
-    light.position.set(lx, 0.6, -1.62);
-    g.add(light);
+  for (const [wx, wz] of [[-0.85, -1.15], [0.85, -1.15], [-0.85, 1.15], [0.85, 1.15]]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 12), dark);
+    w.rotation.z = Math.PI / 2; w.position.set(wx, 0.34, wz); g.add(w);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.28, 8), chrome);
+    hub.rotation.z = Math.PI / 2; hub.position.set(wx, 0.34, wz); g.add(hub);
   }
   return g;
 }
+// v2.1: moto realista — ruedas con radios, tanque, asiento, manillar, horquilla,
+// faro, luz trasera, escape y guardabarros
 function makeMotoMesh(color) {
   const g = new THREE.Group();
   const body = new THREE.MeshLambertMaterial({ color });
   const dark = new THREE.MeshLambertMaterial({ color: 0x222226 });
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 1.9), body);
-  frame.position.y = 0.75;
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.7), dark);
-  seat.position.set(0, 0.95, 0.5);
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.08), dark);
-  bar.position.set(0, 1.05, -0.8);
-  g.add(frame, seat, bar);
-  for (const wz of [-0.75, 0.75]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.55), dark);
-    w.position.set(0, 0.28, wz);
-    g.add(w);
+  const chrome = new THREE.MeshLambertMaterial({ color: 0xcfd6dd });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  box(0.28, 0.32, 1.7, body, 0, 0.72, 0); // chasis
+  box(0.42, 0.3, 0.6, body, 0, 0.95, -0.25); // tanque de gasolina
+  box(0.4, 0.12, 0.75, dark, 0, 0.95, 0.5); // asiento
+  box(0.72, 0.07, 0.07, dark, 0, 1.12, -0.85); // manillar
+  box(0.08, 0.1, 0.08, dark, -0.32, 1.1, -0.85); // puño izq
+  box(0.08, 0.1, 0.08, dark, 0.32, 1.1, -0.85); // puño der
+  for (const sx of [-0.09, 0.09]) { // horquilla delantera
+    const f = box(0.06, 0.75, 0.06, chrome, sx, 0.72, -0.78);
+    f.rotation.x = 0.35;
+  }
+  box(0.22, 0.16, 0.08, new THREE.MeshLambertMaterial({ color: 0xffe27a }), 0, 0.98, -0.95); // faro
+  box(0.18, 0.1, 0.06, new THREE.MeshLambertMaterial({ color: 0xd62f2f }), 0, 0.9, 0.95); // luz trasera
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 8), chrome);
+  exhaust.rotation.x = Math.PI / 2; exhaust.position.set(0.2, 0.5, 0.3); g.add(exhaust);
+  for (const wz of [-0.8, 0.8]) { // guardabarros
+    box(0.22, 0.06, 0.55, body, 0, 0.72, wz);
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.14, 14), dark);
+    w.rotation.z = Math.PI / 2; w.position.set(0, 0.35, wz); g.add(w);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.16, 8), chrome);
+    hub.rotation.z = Math.PI / 2; hub.position.set(0, 0.35, wz); g.add(hub);
   }
   return g;
 }
+// v2.1: avión comercial — fuselaje con franja azul, ventanillas, cabina, alas,
+// cola, motores y tren de aterrizaje (pilotable)
+function makePlaneMesh(color) {
+  const g = new THREE.Group();
+  const white = new THREE.MeshLambertMaterial({ color });
+  const blue = new THREE.MeshLambertMaterial({ color: 0x2f6fd6 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x222226 });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x9ec3e8 });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 9, 10), white);
+  fus.rotation.x = Math.PI / 2; fus.position.y = 1.7; g.add(fus);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 8), white);
+  nose.scale.set(1, 1, 1.6); nose.position.set(0, 1.7, -4.5); g.add(nose);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.3, 2, 10), white);
+  tail.rotation.x = Math.PI / 2; tail.position.set(0, 1.7, 5.2); g.add(tail);
+  box(1.75, 0.3, 9.2, blue, 0, 1.45, 0); // franja azul
+  for (let z = -3.5; z <= 3.5; z += 1) { // ventanillas
+    box(0.06, 0.32, 0.42, dark, -0.86, 2.0, z);
+    box(0.06, 0.32, 0.42, dark, 0.86, 2.0, z);
+  }
+  box(0.5, 0.35, 0.1, dark, -0.35, 2.05, -5.05); // cabina izq
+  box(0.5, 0.35, 0.1, dark, 0.35, 2.05, -5.05); // cabina der
+  for (const sx of [-1, 1]) { // alas (barridas hacia atrás)
+    const wing = box(5.4, 0.12, 1.7, white, sx * 3.1, 1.35, 0.4);
+    wing.rotation.y = -sx * 0.18;
+    box(1.9, 0.1, 0.9, white, sx * 1.0, 1.9, 4.3); // estabilizador de cola
+    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.7, 10), new THREE.MeshLambertMaterial({ color: 0x8a8f96 }));
+    eng.rotation.x = Math.PI / 2; eng.position.set(sx * 1.9, 0.85, 0.3); g.add(eng);
+    const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.1, 10), dark);
+    intake.rotation.x = Math.PI / 2; intake.position.set(sx * 1.9, 0.85, -0.58); g.add(intake);
+  }
+  box(0.14, 1.9, 1.5, blue, 0, 2.7, 4.4); // aleta vertical de la cola
+  for (const [gx, gz] of [[0, -3.6], [-0.65, 0.6], [0.65, 0.6]]) { // tren de aterrizaje
+    box(0.12, 0.6, 0.12, dark, gx, 0.35, gz);
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 8), dark);
+    w.rotation.z = Math.PI / 2; w.position.set(gx, 0.22, gz); g.add(w);
+  }
+  return g;
+}
+// v2.1: caza de combate — fuselaje fino, morro puntiagudo, cabina de cristal,
+// alas en delta, aletas, postquemadores (pilotable, vuela)
+function makeJetMesh(color) {
+  const g = new THREE.Group();
+  const body = new THREE.MeshLambertMaterial({ color });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x222226 });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x9ec3e8 });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 5.5, 8), body);
+  fus.rotation.x = Math.PI / 2; fus.position.y = 1.2; g.add(fus);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.4, 8), body);
+  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 1.2, -3.4); g.add(nose);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), glass);
+  canopy.scale.set(0.8, 0.6, 2.2); canopy.position.set(0, 1.65, -1.2); g.add(canopy);
+  for (const sx of [-1, 1]) { // alas en delta (barridas)
+    const wing = box(2.4, 0.08, 1.5, body, sx * 1.2, 1.1, 0.9);
+    wing.rotation.y = -sx * 0.5;
+    const stab = box(1.2, 0.07, 0.7, body, sx * 0.65, 1.3, 2.4);
+    stab.rotation.y = -sx * 0.3;
+    const fin = box(0.08, 0.9, 0.9, body, sx * 0.45, 1.7, 2.2);
+    fin.rotation.z = -sx * 0.35;
+    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.2, 8), dark);
+    eng.rotation.x = Math.PI / 2; eng.position.set(sx * 0.35, 1.0, 2.6); g.add(eng);
+    const burn = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.3, 8), new THREE.MeshLambertMaterial({ color: 0xff7722 }));
+    burn.rotation.x = Math.PI / 2; burn.position.set(sx * 0.35, 1.0, 3.3); g.add(burn);
+  }
+  box(0.08, 1.0, 1.0, body, 0, 1.9, 2.2); // aleta vertical
+  for (const [gx, gz] of [[0, -2.2], [-0.4, 1.2], [0.4, 1.2]]) { // tren de aterrizaje
+    box(0.1, 0.5, 0.1, dark, gx, 0.28, gz);
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.14, 8), dark);
+    w.rotation.z = Math.PI / 2; w.position.set(gx, 0.16, gz); g.add(w);
+  }
+  return g;
+}
+// v2.1: tanque de guerra — casco, orugas con ruedas, torreta giratoria con cañón,
+// escotilla, antena y faro (manejable y dispara)
+function makeTankMesh(color) {
+  const g = new THREE.Group();
+  const green = new THREE.MeshLambertMaterial({ color });
+  const greenDark = new THREE.MeshLambertMaterial({ color: 0x3a4a1c });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x222226 });
+  const chrome = new THREE.MeshLambertMaterial({ color: 0x8a8f96 });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  box(2.0, 0.7, 3.4, green, 0, 0.8, 0); // casco
+  box(1.7, 0.4, 2.6, greenDark, 0, 1.3, 0); // parte superior del casco
+  for (const sx of [-0.98, 0.98]) { // orugas
+    box(0.55, 0.7, 3.6, dark, sx, 0.45, 0);
+    for (const wz of [-1.2, -0.4, 0.4, 1.2]) { // ruedas de la oruga
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.6, 10), chrome);
+      w.rotation.z = Math.PI / 2; w.position.set(sx, 0.35, wz); g.add(w);
+    }
+  }
+  box(1.3, 0.6, 1.6, greenDark, 0, 1.8, 0.1); // torreta
+  const cannon = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.4, 8), dark);
+  cannon.rotation.x = Math.PI / 2; cannon.position.set(0, 1.85, -1.7); g.add(cannon);
+  box(0.3, 0.24, 0.3, dark, 0, 1.85, -2.8); // boca del cañón
+  const hatch = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.1, 10), green);
+  hatch.position.set(0.3, 2.15, 0.2); g.add(hatch);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6), dark);
+  antenna.position.set(-0.5, 2.5, 0.8); g.add(antenna);
+  box(0.3, 0.14, 0.08, new THREE.MeshLambertMaterial({ color: 0xffe27a }), -0.5, 0.95, -1.72); // faro
+  box(0.3, 0.14, 0.08, new THREE.MeshLambertMaterial({ color: 0xffe27a }), 0.5, 0.95, -1.72); // faro
+  return g;
+}
 function addVehicle(type, color, x, z, heading) {
-  const group = type === 'car' ? makeCarMesh(color) : makeMotoMesh(color);
+  const mesh = type === 'car' ? makeCarMesh(color) : type === 'moto' ? makeMotoMesh(color)
+    : type === 'plane' ? makePlaneMesh(color) : type === 'jet' ? makeJetMesh(color) : makeTankMesh(color);
+  const group = new THREE.Group(); // grupo exterior (posición + rumbo) + malla (ladeo/cabeceo al volar)
+  group.add(mesh);
   group.position.set(x, topSolidY(Math.floor(x), Math.floor(z)), z);
   group.rotation.y = heading;
   scene.add(group);
-  const v = { type, group, heading, speed: 0, maxSpeed: type === 'car' ? 12 : 16 };
+  const maxSpeed = type === 'car' ? 12 : type === 'moto' ? 16 : type === 'plane' ? 26 : type === 'jet' ? 34 : 8;
+  const v = { type, group, mesh, heading, speed: 0, maxSpeed, flying: false, vy: 0 };
   vehicles.push(v);
   return v;
 }
 function initVehicles() {
-  addVehicle('car', 0xd62f2f, 32.5, 20, 0);
-  addVehicle('car', 0x2f6fd6, 40.5, 28, Math.PI / 2);
-  addVehicle('car', 0xf2d16b, 32.5, 44, Math.PI);
-  addVehicle('moto', 0x4da34d, 40.5, 16, 0);
-  addVehicle('moto', 0x9b59b6, 32.5, 36, Math.PI / 2);
+  // carros en las calles de la ciudad (2 circulando + 2 aparcados) + motos
+  addVehicle('car', 0xd62f2f, 39.5, 30, 0);
+  addVehicle('car', 0x2f6fd6, 59.5, 48, Math.PI / 2);
+  addVehicle('car', 0xf2d16b, 50, 25.5, Math.PI / 2);
+  addVehicle('car', 0x4da34d, 62.5, 34, 0); // aparcado en la acera
+  addVehicle('car', 0xd68a2f, 46, 57.5, Math.PI / 2); // aparcado en la calle
+  addVehicle('moto', 0x4da34d, 39.5, 62, 0);
+  addVehicle('moto', 0x9b59b6, 59.5, 18, Math.PI / 2);
+  // avión comercial aparcado en la pista del aeropuerto (pilotable, despega por la pista)
+  addVehicle('plane', 0xffffff, 62, 4, -Math.PI / 2);
+  // base militar: 2 tanques + 2 cazas listos en la pista
+  addVehicle('tank', 0x4a5d23, 50, 84, 0);
+  addVehicle('tank', 0x5d6b2f, 58, 84, 0);
+  addVehicle('jet', 0x8a8a92, 50, 89.5, -Math.PI / 2);
+  addVehicle('jet', 0x6b7a8f, 62, 89.5, -Math.PI / 2);
+}
+// aviones volando en el cielo (decoración, dan vida al mundo)
+function initSkyPlanes() {
+  const p1 = makePlaneMesh(0xffffff); p1.scale.setScalar(1.1);
+  const outer1 = new THREE.Group(); outer1.add(p1); scene.add(outer1);
+  const p2 = makeJetMesh(0x8a8a92); p2.scale.setScalar(1.0);
+  const outer2 = new THREE.Group(); outer2.add(p2); scene.add(outer2);
+  skyPlanes.push({ outer: outer1, mesh: p1, cx: 48, cz: 48, r: 34, h: 42, ang: 0, speed: 0.05 });
+  skyPlanes.push({ outer: outer2, mesh: p2, cx: 48, cz: 48, r: 26, h: 34, ang: Math.PI, speed: -0.07 });
+}
+function updateSkyPlanes(dt) {
+  for (const s of skyPlanes) {
+    s.ang += s.speed * dt;
+    const x = s.cx + Math.cos(s.ang) * s.r, z = s.cz + Math.sin(s.ang) * s.r;
+    s.outer.position.set(x, s.h, z);
+    const dirx = s.speed > 0 ? -Math.sin(s.ang) : Math.sin(s.ang);
+    const dirz = s.speed > 0 ? Math.cos(s.ang) : -Math.cos(s.ang);
+    s.outer.rotation.y = Math.atan2(-dirx, -dirz);
+    s.mesh.rotation.z = s.speed > 0 ? -0.18 : 0.18; // ladeo al girar
+  }
 }
 function nearestVehicle(maxDist = 3) {
   let best = null, bd = maxDist;
@@ -1465,12 +1883,20 @@ function tryEnterVehicle() {
   character.visible = false;
   setCameraMode('third');
   beep(300, 500, 0.15, 'square', 0.12);
-  toast(v.type === 'car' ? '🚗 ¡Manejando! W acelerar, A/D girar, E para bajar' : '🏍️ ¡En la moto! W acelerar, A/D girar, E para bajar', 2500);
+  const tips = {
+    car: '🚗 ¡Manejando! W acelerar, A/D girar, E para bajar',
+    moto: '🏍️ ¡En la moto! W acelerar, A/D girar, E para bajar',
+    plane: '✈️ ¡Pilotando el avión! W acelerar por la pista, ESPACIO para despegar y subir, E para bajar (solo en tierra)',
+    jet: '🛩️ ¡En el caza! W acelerar, ESPACIO para despegar y subir, E para bajar (solo en tierra)',
+    tank: '🪖 ¡En el tanque! W acelerar, A/D girar, CLIC o 🎯 para disparar el cañón, E para bajar',
+  };
+  toast(tips[v.type] || '🚗 ¡Manejando!', 3000);
   return true;
 }
 function exitVehicle() {
   if (!driving) return false;
   const v = driving;
+  if (v.flying) { toast('🛬 Aterriza primero para bajar del avión'); return false; }
   driving = null;
   const sx = v.group.position.x + Math.cos(v.heading) * 2;
   const sz = v.group.position.z - Math.sin(v.heading) * 2;
@@ -1480,16 +1906,87 @@ function exitVehicle() {
   toast('🚶 Bajaste del vehículo');
   return true;
 }
+let tankCd = 0;
+function fireTank() { // disparo del cañón: 1 s de recarga, explosión donde impacta
+  const now = performance.now();
+  if (now - tankCd < 900) return false;
+  tankCd = now;
+  const v = driving;
+  const origin = v.group.position.clone().add(new THREE.Vector3(0, 1.8, 0));
+  const dir = new THREE.Vector3(-Math.sin(v.heading), 0, -Math.cos(v.heading));
+  let best = null, bd = 40;
+  for (const m of mobs) {
+    if (!m.alive) continue;
+    const to = m.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)).sub(origin);
+    const along = to.dot(dir);
+    if (along < 1 || along > bd) continue;
+    const perp = to.clone().addScaledVector(dir, -along).length();
+    if (perp < 1.6) { best = m; bd = along; }
+  }
+  if (best) {
+    damageMob(best, 3, best.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+    spawnTracer(origin, best.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+    sfx.shoot();
+  } else {
+    const vox = raycastVoxel(origin, dir, 40);
+    if (vox) { spawnTracer(origin, new THREE.Vector3(vox.x + 0.5, vox.y + 0.5, vox.z + 0.5)); explode(vox.x, vox.y, vox.z); }
+    else {
+      const far = origin.clone().addScaledVector(dir, 30);
+      spawnTracer(origin, far);
+      spawnParticles(far, 0xffaa00, 10);
+      sfx.shoot();
+    }
+  }
+  return true;
+}
 function updateVehicle(dt, input) {
   const v = driving;
   if (!v) return;
-  if (input.forward) v.speed += 9 * dt;
+  const isFlyer = v.type === 'plane' || v.type === 'jet';
+  // despegue: velocidad alta + salto (Espacio o ⬆)
+  if (isFlyer && !v.flying && input.jump && v.speed > (v.type === 'jet' ? 12 : 10)) {
+    v.flying = true; v.vy = 4;
+    toast('🛫 ¡Despegando! W acelerar, ESPACIO subir, S bajar rápido');
+  }
+  if (v.flying) {
+    // volando: W acelera, S frena, A/D gira, Espacio sube, si no baja suave
+    if (input.forward) v.speed += 8 * dt;
+    if (input.back) v.speed -= 10 * dt;
+    if (!input.forward && !input.back) v.speed *= Math.max(0, 1 - 0.4 * dt);
+    v.speed = Math.max(6, Math.min(v.maxSpeed, v.speed)); // en el aire no te paras
+    v.vy += (input.jump ? 6 : -2.5) * dt;
+    if (input.back) v.vy -= 6 * dt; // S para bajar más rápido en el aire
+    v.vy = Math.max(-6, Math.min(8, v.vy));
+    const steer = (input.left ? 1 : 0) - (input.right ? 1 : 0);
+    v.heading += steer * 1.1 * dt;
+    const fx = -Math.sin(v.heading), fz = -Math.cos(v.heading);
+    let nx = v.group.position.x + fx * v.speed * dt;
+    let nz = v.group.position.z + fz * v.speed * dt;
+    let ny = v.group.position.y + v.vy * dt;
+    if (nx < 2 || nx > W - 3) { nx = Math.max(2, Math.min(W - 3, nx)); v.heading += 1.2 * dt; } // giro automático en el borde
+    if (nz < 2 || nz > D - 3) { nz = Math.max(2, Math.min(D - 3, nz)); v.heading += 1.2 * dt; }
+    ny = Math.min(60, ny);
+    const landY = Math.max(topSolidY(Math.floor(nx), Math.floor(nz)), 2); // en el mar aterriza en la superficie
+    if (ny <= landY + 0.1 && v.vy <= 0) { // aterrizaje
+      ny = landY; v.flying = false; v.vy = 0; v.speed *= 0.5;
+      toast('🛬 ¡Aterrizaje!');
+    }
+    v.group.position.set(nx, ny, nz);
+    v.group.rotation.y = v.heading;
+    v.mesh.rotation.z = -steer * 0.3; // ladeo al girar
+    v.mesh.rotation.x = -v.vy * 0.02; // morro arriba al subir
+    player.pos.set(v.group.position.x, v.group.position.y, v.group.position.z);
+    player.vel.set(0, 0, 0);
+    return;
+  }
+  // en tierra: como un carro (el tanque es más lento y pesado)
+  if (input.forward) v.speed += (v.type === 'tank' ? 6 : 9) * dt;
   if (input.back) v.speed -= 12 * dt;
   if (!input.forward && !input.back) v.speed *= Math.max(0, 1 - 1.4 * dt);
   v.speed = Math.max(-4, Math.min(v.maxSpeed, v.speed));
   if (Math.abs(v.speed) > 0.5) {
     const steer = (input.left ? 1 : 0) - (input.right ? 1 : 0);
-    v.heading += steer * 1.7 * dt * Math.sign(v.speed);
+    v.heading += steer * (v.type === 'tank' ? 1.2 : 1.7) * dt * Math.sign(v.speed);
   }
   const fx = -Math.sin(v.heading), fz = -Math.cos(v.heading);
   const nx = v.group.position.x + fx * v.speed * dt;
@@ -1504,6 +2001,7 @@ function updateVehicle(dt, input) {
     v.group.position.y = gy;
   }
   v.group.rotation.y = v.heading;
+  v.mesh.rotation.z = 0; v.mesh.rotation.x = 0;
   player.pos.set(v.group.position.x, v.group.position.y, v.group.position.z);
   player.vel.set(0, 0, 0);
 }
@@ -1518,18 +2016,19 @@ function updateVehicleHUD() {
 // ---------------------------------------------------------------- v2: gente (NPCs)
 const npcs = [];
 const NPC_DEFS = [
-  { name: 'Nacho', job: 'constructor', color: 0x2f6fd6, home: [34, 20], type: 'bueno', greet: '¡Hola! Soy Nacho, constructor 🏗️ ¿Te ayudo a construir?' },
-  { name: 'Dagar', job: 'piloto', color: 0xd62f2f, home: [42, 20], type: 'bueno', greet: '¡Hola! Soy Dagar, piloto ✈️ ¡Algún día volaremos!' },
-  { name: 'Lucía', job: 'doctora', color: 0xe8a0c0, home: [34, 28], type: 'bueno', greet: '¡Hola! Soy Lucía, doctora 🩺 ¿Te sientes bien?' },
-  { name: 'Carlos', job: 'panadero', color: 0xf2d16b, home: [42, 28], type: 'bueno', greet: '¡Hola! Soy Carlos, panadero 🍞 ¡El pan está caliente!' },
-  { name: 'Marta', job: 'maestra', color: 0x7a4fd6, home: [34, 36], type: 'bueno', greet: '¡Hola! Soy Marta, maestra 📚 ¿Aprendemos algo hoy?' },
-  { name: 'Pedro', job: 'mecánico', color: 0x4da34d, home: [42, 36], type: 'bueno', greet: '¡Hola! Soy Pedro, mecánico 🔧 ¿Tu auto necesita arreglo?' },
-  { name: 'Ana', job: 'policía', color: 0x2b4a8f, home: [28, 44], type: 'bueno', greet: '¡Hola! Soy Ana, policía 👮 ¡La ciudad está segura!' },
-  { name: 'Luis', job: 'vendedor', color: 0xd68a2f, home: [48, 44], type: 'bueno', greet: '¡Hola! Soy Luis, vendedor 🛍️ ¡Pasa por mi tienda!' },
-  { name: 'Roco', job: 'matón', color: 0x333333, home: [28, 10], type: 'malo', greet: '😠 ¡Eh, tú! ¡Este es mi barrio!' },
-  { name: 'Tito', job: 'matón', color: 0x555555, home: [42, 10], type: 'malo', greet: '😠 ¡Dame tus bloques o te empujo!' },
+  { name: 'Nacho', job: 'constructor', color: 0x2f6fd6, home: [31, 13], type: 'bueno', greet: '¡Hola! Soy Nacho, constructor 🏗️ ¿Te ayudo a construir?', style: { skin: 0xf2c184, hair: 0x3a2314, hairStyle: 'short', hat: 'helmet', jacket: 0xd68a2f, pants: 0x2b2b44 } },
+  { name: 'Dagar', job: 'piloto', color: 0xd62f2f, home: [63, 13], type: 'bueno', greet: '¡Hola! Soy Dagar, piloto ✈️ ¡Algún día volaremos!', style: { skin: 0xe8b88a, hair: 0x1a1a1a, hairStyle: 'short', hat: 'pilot', jacket: 0x2b4a8f, pants: 0x2b2b44 } },
+  { name: 'Lucía', job: 'doctora', color: 0xe8a0c0, home: [43, 29], type: 'bueno', greet: '¡Hola! Soy Lucía, doctora 🩺 ¿Te sientes bien?', style: { skin: 0xf2c184, hair: 0x6b3a1f, hairStyle: 'bun', jacket: 0xffffff, pants: 0x2b2b44 } },
+  { name: 'Carlos', job: 'panadero', color: 0xf2d16b, home: [50, 29], type: 'bueno', greet: '¡Hola! Soy Carlos, panadero 🍞 ¡El pan está caliente!', style: { skin: 0xc98d5f, hair: 0x3a2314, hairStyle: 'short', hat: 'chef', apron: 0xffffff, pants: 0x2b2b44 } },
+  { name: 'Marta', job: 'maestra', color: 0x7a4fd6, home: [31, 45], type: 'bueno', greet: '¡Hola! Soy Marta, maestra 📚 ¿Aprendemos algo hoy?', style: { skin: 0xf2c184, hair: 0x1a1a1a, hairStyle: 'long', jacket: 0x7a4fd6, pants: 0x333344 } },
+  { name: 'Pedro', job: 'mecánico', color: 0x4da34d, home: [71, 29], type: 'bueno', greet: '¡Hola! Soy Pedro, mecánico 🔧 ¿Tu auto necesita arreglo?', style: { skin: 0xe8b88a, hair: 0x3a2314, hairStyle: 'short', hat: 'cap', jacket: 0x333333, pants: 0x222226 } },
+  { name: 'Ana', job: 'policía', color: 0x2b4a8f, home: [43, 61], type: 'bueno', greet: '¡Hola! Soy Ana, policía 👮 ¡La ciudad está segura!', style: { skin: 0xf2c184, hair: 0x1a1a1a, hairStyle: 'bun', hat: 'pilot', jacket: 0x2b4a8f, pants: 0x1a1a2e, badge: true } },
+  { name: 'Luis', job: 'vendedor', color: 0xd68a2f, home: [63, 61], type: 'bueno', greet: '¡Hola! Soy Luis, vendedor 🛍️ ¡Pasa por mi tienda!', style: { skin: 0xc98d5f, hair: 0x3a2314, hairStyle: 'short', hat: 'cap', apron: 0xf2d16b, pants: 0x2b2b44 } },
+  { name: 'Roco', job: 'matón', color: 0x333333, home: [71, 13], type: 'malo', greet: '😠 ¡Eh, tú! ¡Este es mi barrio!', style: { skin: 0xe8b88a, hair: 0x1a1a1a, hairStyle: 'short', hat: 'hood', jacket: 0x222226, pants: 0x1a1a1a, scale: 1.06 } },
+  { name: 'Tito', job: 'matón', color: 0x555555, home: [31, 61], type: 'malo', greet: '😠 ¡Dame tus bloques o te empujo!', style: { skin: 0x8a5a3b, hair: 0x1a1a1a, hairStyle: 'short', hat: 'hood', jacket: 0x333333, pants: 0x222226, scale: 1.04 } },
 ];
-const STREET_X = [32, 40];
+const STREET_X = [39, 59]; // centros de las calles verticales (x 38-41 y 58-61)
+const STREET_Z = [25, 41, 57]; // centros de las calles horizontales
 function makeNameSprite(text) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64;
   const g = c.getContext('2d');
@@ -1542,41 +2041,93 @@ function makeNameSprite(text) {
   sp.scale.set(2.4, 0.6, 1);
   return sp;
 }
-function makeNPCMesh(color) {
+// v2.1: persona realista de bloques — cara (ojos y boca), pelo según estilo,
+// sombrero de su oficio (casco, gorra de piloto, gorro de chef, capucha),
+// chaqueta de dos tonos, delantal, manos de piel y zapatos. Las extremidades
+// son grupos con pivote en el hombro/cadera para que la animación de caminar gire bien.
+function makeNPCMesh(def) {
+  const s = def.style || {};
   const g = new THREE.Group();
-  const skin = new THREE.MeshLambertMaterial({ color: 0xf2c184 });
-  const shirt = new THREE.MeshLambertMaterial({ color });
-  const pants = new THREE.MeshLambertMaterial({ color: 0x2b2b44 });
-  const hair = new THREE.MeshLambertMaterial({ color: 0x3a2314 });
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin);
-  head.position.y = 1.55;
-  const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.14, 0.52), hair);
-  hairTop.position.y = 1.84;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.3), shirt);
-  torso.position.y = 1.04;
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.66, 0.2), shirt);
-  armL.position.set(-0.39, 1.04, 0);
-  const armR = armL.clone(); armR.position.x = 0.39;
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.68, 0.24), pants);
-  legL.position.set(-0.14, 0.34, 0);
-  const legR = legL.clone(); legR.position.x = 0.14;
-  g.add(head, hairTop, torso, armL, armR, legL, legR);
+  const skin = new THREE.MeshLambertMaterial({ color: s.skin || 0xf2c184 });
+  const shirt = new THREE.MeshLambertMaterial({ color: def.color });
+  const jacketMat = s.jacket ? new THREE.MeshLambertMaterial({ color: s.jacket }) : null;
+  const pants = new THREE.MeshLambertMaterial({ color: s.pants || 0x2b2b44 });
+  const shoeMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const hairMat = new THREE.MeshLambertMaterial({ color: s.hair || 0x3a2314 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  // cabeza con cara (ojos + boca en la cara +z)
+  box(0.5, 0.5, 0.5, skin, 0, 1.55, 0);
+  box(0.07, 0.09, 0.02, dark, -0.11, 1.6, 0.26);
+  box(0.07, 0.09, 0.02, dark, 0.11, 1.6, 0.26);
+  box(0.14, 0.03, 0.02, new THREE.MeshLambertMaterial({ color: 0x7a3b2e }), 0, 1.44, 0.26);
+  // pelo según estilo
+  if (s.hairStyle === 'long') {
+    box(0.52, 0.14, 0.52, hairMat, 0, 1.84, 0);
+    box(0.08, 0.5, 0.5, hairMat, -0.26, 1.5, 0);
+    box(0.08, 0.5, 0.5, hairMat, 0.26, 1.5, 0);
+    box(0.5, 0.5, 0.08, hairMat, 0, 1.5, -0.26);
+  } else if (s.hairStyle === 'bun') {
+    box(0.52, 0.14, 0.52, hairMat, 0, 1.84, 0);
+    box(0.2, 0.2, 0.2, hairMat, 0, 1.8, -0.28); // moño
+  } else {
+    box(0.52, 0.14, 0.52, hairMat, 0, 1.84, 0);
+  }
+  // sombrero de su oficio
+  if (s.hat === 'helmet') { // casco amarillo de constructor
+    box(0.56, 0.18, 0.56, new THREE.MeshLambertMaterial({ color: 0xf2d16b }), 0, 1.88, 0);
+    box(0.62, 0.05, 0.62, new THREE.MeshLambertMaterial({ color: 0xf2d16b }), 0, 1.8, 0);
+  } else if (s.hat === 'pilot') { // gorra de piloto/policía con visera
+    box(0.52, 0.12, 0.52, dark, 0, 1.86, 0);
+    box(0.3, 0.04, 0.18, dark, 0, 1.83, 0.32);
+  } else if (s.hat === 'chef') { // gorro blanco alto de panadero
+    box(0.4, 0.35, 0.4, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, 1.98, 0);
+  } else if (s.hat === 'cap') { // gorra normal
+    box(0.52, 0.12, 0.52, new THREE.MeshLambertMaterial({ color: 0x333333 }), 0, 1.86, 0);
+    box(0.26, 0.04, 0.16, new THREE.MeshLambertMaterial({ color: 0x333333 }), 0, 1.83, 0.32);
+  } else if (s.hat === 'hood') { // capucha oscura (deja la cara libre)
+    box(0.56, 0.16, 0.56, dark, 0, 1.86, 0);
+    box(0.06, 0.4, 0.5, dark, -0.26, 1.58, 0);
+    box(0.06, 0.4, 0.5, dark, 0.26, 1.58, 0);
+  }
+  // torso: camisa + chaqueta de dos tonos en el pecho
+  box(0.56, 0.72, 0.3, shirt, 0, 1.04, 0);
+  if (jacketMat) box(0.6, 0.5, 0.34, jacketMat, 0, 1.18, 0);
+  if (s.apron) box(0.4, 0.5, 0.03, new THREE.MeshLambertMaterial({ color: s.apron }), 0, 1.05, 0.17); // delantal
+  if (s.badge) box(0.08, 0.08, 0.02, new THREE.MeshLambertMaterial({ color: 0xf2d16b }), -0.15, 1.25, 0.18); // placa
+  // brazos con pivote en el hombro: manga + mano de piel
+  const armL = new THREE.Group(); armL.position.set(-0.39, 1.38, 0);
+  const armR = new THREE.Group(); armR.position.set(0.39, 1.38, 0);
+  for (const arm of [armL, armR]) {
+    const up = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.42, 0.2), jacketMat || shirt); up.position.y = -0.21; arm.add(up);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.2), skin); hand.position.y = -0.5; arm.add(hand);
+    g.add(arm);
+  }
+  // piernas con pivote en la cadera: pantalón + zapato
+  const legL = new THREE.Group(); legL.position.set(-0.14, 0.7, 0);
+  const legR = new THREE.Group(); legR.position.set(0.14, 0.7, 0);
+  for (const leg of [legL, legR]) {
+    const lp = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), pants); lp.position.y = -0.25; leg.add(lp);
+    const sh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.34), shoeMat); sh.position.set(0, -0.56, 0.04); leg.add(sh);
+    g.add(leg);
+  }
+  if (s.scale) g.scale.setScalar(s.scale);
   g.userData = { armL, armR, legL, legR };
   return g;
 }
 function initNPCs() {
   for (const def of NPC_DEFS) {
-    const group = makeNPCMesh(def.color);
+    const group = makeNPCMesh(def);
     const label = makeNameSprite(def.name);
     label.position.y = 2.35;
     group.add(label);
-    const hx = def.home[0] + 0.5, hz = def.home[1] + 4.5; // delante de su casa
+    const hx = def.home[0] + 3, hz = def.home[1] - 1.5; // delante de su casa (puerta)
     group.position.set(hx, topSolidY(Math.floor(hx), Math.floor(hz)), hz);
     scene.add(group);
     // puntos de paseo: cruces de calles cercanos a su casa + frente de la casa
     const wps = [];
-    for (const sx of STREET_X) for (const sz of [16, 24, 32, 40]) {
-      if (Math.hypot(sx - hx, sz - hz) < 24) wps.push([sx + 0.5, sz + 0.5]);
+    for (const sx of STREET_X) for (const sz of STREET_Z) {
+      if (Math.hypot(sx - hx, sz - hz) < 32) wps.push([sx + 0.5, sz + 0.5]);
     }
     wps.push([hx, hz]);
     npcs.push({ ...def, group, wps, wp: 0, waitUntil: 0, greetAt: 0, bumpAt: 0, walkPhase: Math.random() * 6 });
@@ -1638,11 +2189,12 @@ function updateNPCs(dt, now) {
 // v2: arrancar vehículos y gente
 initVehicles();
 initNPCs();
+initSkyPlanes(); // aviones volando en el cielo
 updateHandVisibility();
 
 // ganchos de prueba (no afectan al juego)
 window.__myblock = {
-  ready: true, version: '2.0.0',
+  ready: true, version: '2.1.0',
   state: () => state,
   mode: () => cameraMode,
   setMode: (m) => setCameraMode(m),
@@ -1677,8 +2229,8 @@ window.__myblock = {
       dir.normalize();
       const vox = raycastVoxel(head, dir, dist + 0.5);
       if (vox && vox.dist < dist - 0.5) continue; // tapado por el terreno
-      const m = mobs.find((mm) => mm.alive) || mobs[0];
-      if (!m.group.children.length) return false;
+      const m = mobs.find((mm) => mm.alive) || mobs.find((mm) => mm.group.children.length) || mobs[0];
+      if (!m.group.children.length) spawnMob(mobs.indexOf(m)); // forzar la malla si aún no apareció ninguno
       m.hp = 3; m.alive = true; m.group.visible = true;
       m.group.position.set(x, y, z);
       return true;
@@ -1693,6 +2245,14 @@ window.__myblock = {
   worldSize: () => ({ W, D, H }),
   placeBlock: () => placeBlock(),
   breakBlock: () => breakBlock(),
+  lastBroken: () => lastBroken,
+  lastPlaceError: () => lastPlaceError,
+  mobConfig: () => ({ max: MAX_MOBS, chaseDist: MOB_CHASE_DIST }),
+  npcParts: () => npcs[0].group.children.length,
+  drivingType: () => (driving ? driving.type : null),
+  drivingFlying: () => !!(driving && driving.flying),
+  fireTank: () => fireTank(),
+  skyPlanes: () => skyPlanes.length,
   punch: () => punch(),
   hotbarCount: () => allSlots().length,
   hotbarSlots: () => allSlots().map((s) => s.name),
