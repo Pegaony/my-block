@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MY BLOCK — Juego de bloques</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%232d6a1e'/%3E%3Crect y='0' width='64' height='22' rx='10' fill='%237dff5e'/%3E%3Ctext x='32' y='52' font-size='28' font-family='Arial' font-weight='bold' text-anchor='middle' fill='white'%3EMB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- Mira -->
+  <div id="crosshair">+</div>
+
+  <!-- HUD superior -->
+  <div id="hud-top">
+    <div id="hearts"></div>
+    <div id="score">👾 Monstruos: <span id="score-num">0</span></div>
+  </div>
+
+  <!-- Botones superiores derechos -->
+  <div id="hud-buttons">
+    <button id="btn-camera" title="Cambiar cámara (F)">📷 Cámara</button>
+    <button id="btn-power" title="Poder: Super Salto (Q)">⚡ Poder</button>
+    <button id="btn-sound" title="Sonido">🔊</button>
+    <button id="btn-pause" title="Pausa (Esc)">⏸</button>
+  </div>
+
+  <!-- Info de arma / munición -->
+  <div id="ammo">🔫 <span id="ammo-num">12</span> / ∞</div>
+
+  <!-- Mensaje central temporal -->
+  <div id="toast"></div>
+
+  <!-- Barra rápida -->
+  <div id="hotbar"></div>
+
+  <!-- Controles táctiles -->
+  <div id="touch-ui">
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="touch-buttons">
+      <button id="tb-jump" title="Saltar">⬆</button>
+      <button id="tb-break" title="Romper">⛏</button>
+      <button id="tb-place" title="Poner bloque">🧱</button>
+      <button id="tb-shoot" title="Disparar">🎯</button>
+    </div>
+  </div>
+
+  <!-- Pantalla de inicio -->
+  <div id="start-screen">
+    <h1>MY BLOCK</h1>
+    <p class="tagline">¡Construye, dispara y usa tus poderes!</p>
+    <button id="btn-play" class="big">▶ JUGAR</button>
+    <button id="btn-how" class="big secondary">❓ CÓMO SE JUEGA</button>
+    <div id="how" hidden>
+      <h2>Cómo se juega</h2>
+      <p><b>PC:</b> WASD para moverte · ratón para mirar · Espacio para saltar ·
+      clic izquierdo para romper o disparar · clic derecho para poner bloques ·
+      teclas 1-9 para elegir · <b>F</b> cambia la cámara (1.ª / 3.ª persona) ·
+      <b>Q</b> poder Super Salto · <b>R</b> recargar.</p>
+      <p><b>Móvil:</b> joystick izquierdo para moverte · arrastra a la derecha
+      para mirar · botones para saltar, romper, poner y disparar.</p>
+      <p>Dispara a los monstruos de bloques 👾 con la pistola 🔫. ¡No dejes
+      que te quiten los corazones ❤!</p>
+    </div>
+    <p class="credit">Un juego estilo Minecraft, hecho para ti · 100% offline</p>
+  </div>
+
+  <!-- Pausa -->
+  <div id="pause-screen" hidden>
+    <h1>⏸ PAUSA</h1>
+    <button id="btn-resume" class="big">▶ SEGUIR JUGANDO</button>
+    <button id="btn-new-world" class="big secondary">🌍 MUNDO NUEVO</button>
+    <button id="btn-quit" class="big secondary">🏠 PANTALLA INICIO</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+<script type="module" src="game.js"></script>
+</body>
+</html>
